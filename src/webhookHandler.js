@@ -1,27 +1,35 @@
-const subscriptions = new Map();
+const db = require("./db");
 
-module.exports = (req, res) => {
-  const event = req.body;
-
-  if (!event?.type || !event?.data?.object) {
-    return res.status(400).send("Invalid event format");
-  }
-
+function handleStripeEvent(event) {
   const subscription = event.data.object;
-  const id = subscription.id;
-  const customerId = subscription.customer;
-  const status = subscription.status;
-  const currentPeriodEnd = subscription.current_period_end;
+  const { id, customer, status, current_period_end } = subscription;
 
-  subscriptions.set(id, {
-    id,
-    customerId,
-    status,
-    currentPeriodEnd,
-  });
+  switch (event.type) {
+    case "customer.subscription.created":
+    case "customer.subscription.updated": {
+      const stmt = db.prepare(`
+        INSERT INTO subscriptions (id, customer_id, status, current_period_end)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          customer_id = excluded.customer_id,
+          status = excluded.status,
+          current_period_end = excluded.current_period_end
+      `);
+      stmt.run(id, customer, status, current_period_end);
+      console.log(`Saved subscription ${id} (${status})`);
+      break;
+    }
 
-  console.log(`📬 Received event: ${event.type}`);
-  console.table([...subscriptions.entries()]);
+    case "customer.subscription.deleted": {
+      const stmt = db.prepare(`DELETE FROM subscriptions WHERE id = ?`);
+      stmt.run(id);
+      console.log(`Deleted subscription ${id}`);
+      break;
+    }
 
-  res.sendStatus(200);
-};
+    default:
+      console.log(`Unhandled event type: ${event.type}`);
+  }
+}
+
+module.exports = { handleStripeEvent };
