@@ -1,0 +1,11 @@
+{
+  "type": "customer.subscription.updated",
+  "data": {
+    "object": {
+      "id": "sub_0001",
+      "customer": "cus_123",
+      "status": "past_due",
+      "current_period_end": "2025-12-31T23:59:59Z"
+    }
+  }
+}
