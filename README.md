@@ -51,6 +51,18 @@ Accepts Stripe-style webhook events. Supported event types:
 - `customer.subscription.updated`
 - `customer.subscription.deleted`
 
+- **Created**: Indicates a new subscription started, so we add it to our database.
+- **Updated**: Reflects any change in subscription status or period end date, ensuring our data stays current.
+- **Deleted**: Represents cancellation or removal, so we delete it from our records.
+
+### How are they handled?
+
+- On **created** events, the service inserts a new subscription record. It rejects attempts to create duplicates.
+- On **updated** events, the service updates status and period end, verifying the subscription exists and belongs to the same customer.
+- On **deleted** events, the service removes the subscription record if it exists.
+
+Each event returns a clear JSON response indicating success or a detailed error message.
+
 **Example Request Payload:**
 
 ```json
@@ -177,6 +189,22 @@ GET /subscriptions/sub_123
 - `updated` events require the subscription to already exist and match the `customer_id`.
 - `deleted` events also require the subscription to exist.
 - Clear JSON responses make it easy to debug using Postman or in tests.
+
+## 🔍 Assumptions & Design Considerations
+
+- **Single source of truth:** Stripe webhook events are treated as the definitive source of subscription status. The backend does not query Stripe APIs but relies solely on incoming events.
+- **Idempotency:** Duplicate `created` events for the same subscription ID are rejected to prevent data corruption.
+- **Customer ID verification:** Updates that attempt to change the `customer_id` for an existing subscription are rejected to ensure data integrity.
+- **Synchronous database operations:** Using `better-sqlite3` for simplicity and speed, with synchronous queries.
+- **No authentication:** This mock backend is open and designed for local testing. In production, webhook endpoints should verify signatures and protect against unauthorized access.
+- **Limited event types:** Only subscription lifecycle events are handled. Other Stripe event types (e.g., invoices, payments) are out of scope.
+- **Simple schema:** The subscription data model stores only essential fields to keep the mock minimalistic.
+- **Error handling:** The service returns structured errors to help with debugging during integration or testing.
+- **API extension:** The backend exposes endpoints to list all subscriptions and fetch by subscription ID, useful for manual verification or UI integration.
+- **No retry logic:** Webhook event retries or failures should be handled by the caller (Stripe) as per their system. This service assumes well-formed incoming requests.
+- **No timezone conversions:** Timestamps are stored and returned as Unix epoch integers.
+
+---
 
 ## 🛠 Database
 
