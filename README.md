@@ -146,23 +146,27 @@ GET /subscriptions/sub_123
 
 **Success Response:**
 
+```json
 {
-"success": true,
-"subscription_id": "sub_123",
-"customer_id": "cus_456",
-"status": "active",
-"current_period_end": 1735689600,
-"is_active": true,
-"message": "Subscription sub_123 is active"
+  "success": true,
+  "subscription_id": "sub_123",
+  "customer_id": "cus_456",
+  "status": "active",
+  "current_period_end": 1735689600,
+  "is_active": true,
+  "message": "Subscription sub_123 is active"
 }
+```
 
 **Error Response (Not Found):**
 
+```json
 {
-"success": false,
-"error": "not_found",
-"message": "Subscription sub_999 not found"
+  "success": false,
+  "error": "not_found",
+  "message": "Subscription sub_999 not found"
 }
+```
 
 ---
 
