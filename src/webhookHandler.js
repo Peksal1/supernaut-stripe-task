@@ -15,8 +15,14 @@ function handleStripeEvent(event) {
           current_period_end = excluded.current_period_end
       `);
       stmt.run(id, customer, status, current_period_end);
-      console.log(`Created or updated subscription ${id} (${status})`);
-      return true;
+      return {
+        success: true,
+        action: "created_or_updated",
+        subscription_id: id,
+        status,
+        current_period_end,
+        message: `Created or updated subscription ${id} (${status})`,
+      };
     }
 
     case "customer.subscription.updated": {
@@ -24,25 +30,33 @@ function handleStripeEvent(event) {
         .prepare(`SELECT * FROM subscriptions WHERE id = ?`)
         .get(id);
       if (!existing) {
-        console.warn(`Subscription ${id} does not exist — cannot update`);
-        return false;
+        return {
+          success: false,
+          error: "not_found",
+          message: `Subscription ${id} does not exist — cannot update`,
+        };
       }
 
       if (existing.customer_id !== customer) {
-        console.warn(
-          `Rejected update for ${id} — changing customer_id is not allowed`
-        );
-        return false;
+        return {
+          success: false,
+          error: "customer_id_mismatch",
+          message: `Rejected update for ${id} — changing customer_id is not allowed`,
+        };
       }
 
       const stmt = db.prepare(`
         UPDATE subscriptions SET status = ?, current_period_end = ? WHERE id = ?
       `);
       stmt.run(status, current_period_end, id);
-      console.log(
-        `Updated subscription ${id}: status=${status}, current_period_end=${current_period_end}`
-      );
-      return true;
+      return {
+        success: true,
+        action: "updated",
+        subscription_id: id,
+        status,
+        current_period_end,
+        message: `Updated subscription ${id}: status=${status}, current_period_end=${current_period_end}`,
+      };
     }
 
     case "customer.subscription.deleted": {
@@ -50,19 +64,29 @@ function handleStripeEvent(event) {
         .prepare(`SELECT id FROM subscriptions WHERE id = ?`)
         .get(id);
       if (!existing) {
-        console.warn(`Tried to delete non-existent subscription ${id}`);
-        return false;
+        return {
+          success: false,
+          error: "not_found",
+          message: `Tried to delete non-existent subscription ${id}`,
+        };
       }
 
-      const stmt = db.prepare(`DELETE FROM subscriptions WHERE id = ?`);
-      stmt.run(id);
-      console.log(`Deleted subscription ${id}`);
-      return true;
+      db.prepare(`DELETE FROM subscriptions WHERE id = ?`).run(id);
+      return {
+        success: true,
+        action: "deleted",
+        subscription_id: id,
+        message: `Deleted subscription ${id}`,
+      };
     }
 
-    default:
-      console.log(`Unhandled event type: ${event.type}`);
-      return false;
+    default: {
+      return {
+        success: false,
+        error: "unhandled_event",
+        message: `Unhandled event type: ${event.type}`,
+      };
+    }
   }
 }
 
@@ -70,16 +94,21 @@ function webhookHandler(req, res) {
   const event = req.body;
 
   if (!event || !event.type || !event.data || !event.data.object) {
-    console.warn("Invalid event payload");
-    return res.status(400).send("Invalid event");
+    const errorResponse = {
+      success: false,
+      error: "invalid_payload",
+      message: "Invalid event payload",
+    };
+    console.warn(errorResponse.message);
+    return res.status(400).json(errorResponse);
   }
 
-  const success = handleStripeEvent(event);
+  const result = handleStripeEvent(event);
 
-  if (success) {
-    res.status(200).send("Event processed");
+  if (result.success) {
+    return res.status(200).json(result);
   } else {
-    res.status(400).send("Event not handled");
+    return res.status(400).json(result);
   }
 }
 

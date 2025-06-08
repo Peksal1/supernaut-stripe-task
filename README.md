@@ -1,13 +1,14 @@
 # Supernaut Webhook Task
 
-A backend mock service for simulating Stripe webhook handling. It listens to Stripe-style events related to subscriptions (created, updated, and deleted) and stores subscription data in a local SQLite database.
+A backend mock service for simulating Stripe webhook handling. It listens to Stripe-style events related to subscriptions (`created`, `updated`, and `deleted`) and stores subscription data in a local SQLite database.
 
 ## 📦 Features
 
-- Stores subscription events in SQLite.
-- Handles creation, update, and deletion of subscriptions.
-- Prevents duplicate entries or invalid deletes/updates.
-- Exposes an API to list all saved subscriptions.
+- Stores subscription events in SQLite
+- Handles creation, update, and deletion of subscriptions
+- Prevents invalid updates or deletes
+- Returns structured JSON responses with detailed success or error messages
+- Exposes an API to list all saved subscriptions
 
 ## 📌 Requirements
 
@@ -30,56 +31,86 @@ A backend mock service for simulating Stripe webhook handling. It listens to Str
 
    npm run dev
 
-   The server will run at:
+   Server will run at:
    http://localhost:3000
 
 ## 📡 Endpoints
 
-1. POST /webhook
-   Accepts Stripe-style webhook events.
+### 1. POST /webhook
 
-   Supported event types:
+Accepts Stripe-style webhook events. Supported event types:
 
-   - customer.subscription.created
-   - customer.subscription.updated
-   - customer.subscription.deleted
+- customer.subscription.created
+- customer.subscription.updated
+- customer.subscription.deleted
 
-   Example Payload (send as application/json):
+Example Request Payload:
 
-   {
-   "type": "customer.subscription.created",
-   "data": {
-   "object": {
-   "id": "sub_123",
-   "customer": "cus_456",
-   "status": "active",
-   "current_period_end": 1735689600
-   }
-   }
-   }
+{
+"type": "customer.subscription.created",
+"data": {
+"object": {
+"id": "sub_123",
+"customer": "cus_456",
+"status": "active",
+"current_period_end": 1735689600
+}
+}
+}
 
-   You can test this using Postman by sending a POST request to:
-   http://localhost:3000/webhook
+Example Success Response:
 
-2. GET /subscriptions
-   Returns a list of all stored subscriptions.
+{
+"success": true,
+"action": "created_or_updated",
+"subscription_id": "sub_123",
+"status": "active",
+"current_period_end": 1735689600,
+"message": "Created or updated subscription sub_123 (active)"
+}
 
-   Example Response:
-   [
-   {
-   "id": "sub_123",
-   "customer_id": "cus_456",
-   "status": "active",
-   "current_period_end": 1735689600
-   }
-   ]
+Example Error Response (invalid update):
 
-## 🧪 Notes
+{
+"success": false,
+"error": "customer_id_mismatch",
+"message": "Rejected update for sub_123 — changing customer_id is not allowed"
+}
 
-- Subscription `id` is unique.
-- `created` events won't add duplicate entries.
-- `updated` or `deleted` events are ignored if the subscription does not exist.
+You can test this using Postman:
+
+- URL: http://localhost:3000/webhook
+- Method: POST
+- Headers: Content-Type: application/json
+- Body: raw JSON payload (like above)
+
+---
+
+### 2. GET /subscriptions
+
+Returns a list of all stored subscriptions.
+
+Example Response:
+
+[
+{
+"id": "sub_123",
+"customer_id": "cus_456",
+"status": "active",
+"current_period_end": 1735689600
+}
+]
+
+---
+
+## ❗ Notes
+
+- Subscription `id` is unique and enforced in the database.
+- `created` events perform UPSERT (insert or update).
+- `updated` and `deleted` events require that the subscription already exists.
+- Returns detailed JSON responses, useful for debugging in Postman or automated tests.
 
 ## 🛠 Database
 
-Uses better-sqlite3. The database file is created automatically on first run.
+- Uses better-sqlite3 for fast, synchronous access
+- The SQLite database file is automatically created on first run (subscriptions.db)
