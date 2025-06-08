@@ -6,22 +6,31 @@ function handleStripeEvent(event) {
 
   switch (event.type) {
     case "customer.subscription.created": {
-      const stmt = db.prepare(`
+      const existing = db
+        .prepare(`SELECT id FROM subscriptions WHERE id = ?`)
+        .get(id);
+      if (existing) {
+        return {
+          success: false,
+          error: "already_exists",
+          message: `Subscription ${id} already exists — cannot create duplicate`,
+        };
+      }
+
+      db.prepare(
+        `
         INSERT INTO subscriptions (id, customer_id, status, current_period_end)
         VALUES (?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          customer_id = excluded.customer_id,
-          status = excluded.status,
-          current_period_end = excluded.current_period_end
-      `);
-      stmt.run(id, customer, status, current_period_end);
+      `
+      ).run(id, customer, status, current_period_end);
+
       return {
         success: true,
-        action: "created_or_updated",
+        action: "created",
         subscription_id: id,
         status,
         current_period_end,
-        message: `Created or updated subscription ${id} (${status})`,
+        message: `Created subscription ${id} (${status})`,
       };
     }
 
@@ -41,21 +50,23 @@ function handleStripeEvent(event) {
         return {
           success: false,
           error: "customer_id_mismatch",
-          message: `Rejected update for ${id} — changing customer_id is not allowed`,
+          message: `Subscription ${id} belongs to a different customer — update rejected`,
         };
       }
 
-      const stmt = db.prepare(`
+      db.prepare(
+        `
         UPDATE subscriptions SET status = ?, current_period_end = ? WHERE id = ?
-      `);
-      stmt.run(status, current_period_end, id);
+      `
+      ).run(status, current_period_end, id);
+
       return {
         success: true,
         action: "updated",
         subscription_id: id,
         status,
         current_period_end,
-        message: `Updated subscription ${id}: status=${status}, current_period_end=${current_period_end}`,
+        message: `Updated subscription ${id} — status: ${status}, current_period_end: ${current_period_end}`,
       };
     }
 
@@ -67,7 +78,7 @@ function handleStripeEvent(event) {
         return {
           success: false,
           error: "not_found",
-          message: `Tried to delete non-existent subscription ${id}`,
+          message: `Subscription ${id} does not exist — cannot delete`,
         };
       }
 

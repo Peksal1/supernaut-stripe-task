@@ -6,8 +6,9 @@ A backend mock service for simulating Stripe webhook handling. It listens to Str
 
 - Stores subscription events in SQLite
 - Handles creation, update, and deletion of subscriptions
-- Prevents invalid updates or deletes
-- Returns structured JSON responses with detailed success or error messages
+- Prevents duplicate creation and invalid updates
+- Rejects updates that attempt to change `customer_id`
+- Returns structured JSON responses with clear success or error messages
 - Exposes an API to list all saved subscriptions
 
 ## 📌 Requirements
@@ -20,18 +21,24 @@ A backend mock service for simulating Stripe webhook handling. It listens to Str
 
 1. Clone the repo:
 
+   ```
    git clone https://github.com/your-username/stripe-subscription-webhook.git
    cd stripe-subscription-webhook
+   ```
 
 2. Install dependencies:
 
+   ```
    npm install
+   ```
 
 3. Start the server:
 
+   ```
    npm run dev
+   ```
 
-   Server will run at:
+   Server will run at:  
    http://localhost:3000
 
 ## 📡 Endpoints
@@ -40,49 +47,75 @@ A backend mock service for simulating Stripe webhook handling. It listens to Str
 
 Accepts Stripe-style webhook events. Supported event types:
 
-- customer.subscription.created
-- customer.subscription.updated
-- customer.subscription.deleted
+- `customer.subscription.created`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
 
-Example Request Payload:
+**Example Request Payload:**
 
+```json
 {
-"type": "customer.subscription.created",
-"data": {
-"object": {
-"id": "sub_123",
-"customer": "cus_456",
-"status": "active",
-"current_period_end": 1735689600
+  "type": "customer.subscription.created",
+  "data": {
+    "object": {
+      "id": "sub_123",
+      "customer": "cus_456",
+      "status": "active",
+      "current_period_end": 1735689600
+    }
+  }
 }
-}
-}
+```
 
-Example Success Response:
+**Example Success Response (create):**
 
+```json
 {
-"success": true,
-"action": "created_or_updated",
-"subscription_id": "sub_123",
-"status": "active",
-"current_period_end": 1735689600,
-"message": "Created or updated subscription sub_123 (active)"
+  "success": true,
+  "action": "created",
+  "subscription_id": "sub_123",
+  "status": "active",
+  "current_period_end": 1735689600,
+  "message": "Created subscription sub_123 (active)"
 }
+```
 
-Example Error Response (invalid update):
+**Example Error Response (create duplicate):**
 
+```json
 {
-"success": false,
-"error": "customer_id_mismatch",
-"message": "Rejected update for sub_123 — changing customer_id is not allowed"
+  "success": false,
+  "error": "already_exists",
+  "message": "Subscription sub_123 already exists — cannot create duplicate"
 }
+```
 
-You can test this using Postman:
+**Example Error Response (update non-existing):**
+
+```json
+{
+  "success": false,
+  "error": "not_found",
+  "message": "Subscription sub_999 does not exist — cannot update"
+}
+```
+
+**Example Error Response (customer_id mismatch):**
+
+```json
+{
+  "success": false,
+  "error": "customer_id_mismatch",
+  "message": "Subscription sub_123 belongs to a different customer — update rejected"
+}
+```
+
+**You can test this using Postman:**
 
 - URL: http://localhost:3000/webhook
 - Method: POST
 - Headers: Content-Type: application/json
-- Body: raw JSON payload (like above)
+- Body: raw JSON payload (as shown above)
 
 ---
 
@@ -90,27 +123,30 @@ You can test this using Postman:
 
 Returns a list of all stored subscriptions.
 
-Example Response:
+**Example Response:**
 
+```json
 [
-{
-"id": "sub_123",
-"customer_id": "cus_456",
-"status": "active",
-"current_period_end": 1735689600
-}
+  {
+    "id": "sub_123",
+    "customer_id": "cus_456",
+    "status": "active",
+    "current_period_end": 1735689600
+  }
 ]
+```
 
 ---
 
 ## ❗ Notes
 
-- Subscription `id` is unique and enforced in the database.
-- `created` events perform UPSERT (insert or update).
-- `updated` and `deleted` events require that the subscription already exists.
-- Returns detailed JSON responses, useful for debugging in Postman or automated tests.
+- Subscription `id` is unique and enforced.
+- `created` events strictly insert new subscriptions and fail if the ID already exists.
+- `updated` events require the subscription to already exist and match the `customer_id`.
+- `deleted` events also require the subscription to exist.
+- Clear JSON responses make it easy to debug using Postman or in tests.
 
 ## 🛠 Database
 
-- Uses better-sqlite3 for fast, synchronous access
-- The SQLite database file is automatically created on first run (subscriptions.db)
+- Uses `better-sqlite3` for fast, synchronous access
+- Database file `subscriptions.db` is auto-created on first run.
