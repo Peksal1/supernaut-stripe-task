@@ -5,7 +5,7 @@
       "id": "sub_0001",
       "customer": "cus_123",
       "status": "canceled",
-      "current_period_end": "2025-12-31T23:59:59Z"
+      "current_period_end": "1720000000"
     }
   }
 }
