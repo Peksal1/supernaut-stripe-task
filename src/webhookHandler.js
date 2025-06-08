@@ -123,4 +123,44 @@ function webhookHandler(req, res) {
   }
 }
 
-module.exports = { webhookHandler };
+function checkSubscriptionHandler(req, res) {
+  const { id } = req.params;
+
+  if (!id) {
+    return res.status(400).json({
+      success: false,
+      error: "missing_id",
+      message: "Subscription ID is required",
+    });
+  }
+
+  const subscription = db
+    .prepare(`SELECT * FROM subscriptions WHERE id = ?`)
+    .get(id);
+
+  if (!subscription) {
+    return res.status(404).json({
+      success: false,
+      error: "not_found",
+      message: `Subscription ${id} not found`,
+    });
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const isActive =
+    subscription.status === "active" && subscription.current_period_end > now;
+
+  return res.status(200).json({
+    success: true,
+    subscription_id: subscription.id,
+    customer_id: subscription.customer_id,
+    status: subscription.status,
+    current_period_end: subscription.current_period_end,
+    is_active: isActive,
+    message: isActive
+      ? `Subscription ${id} is active`
+      : `Subscription ${id} is inactive or expired`,
+  });
+}
+
+module.exports = { webhookHandler, checkSubscriptionHandler };
